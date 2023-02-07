@@ -1,15 +1,37 @@
 require('dotenv').config()
 require('./mongo.js')
 
+const Sentry = require('@sentry/node')
+const Tracing = require('@sentry/tracing')
 const express = require('express')
 const app = express()
 const cors = require('cors')
 const Note = require('./models/Note')
+const notFound = require('./middleware/notFound.js')
+const handleErrors = require('./middleware/handleErrors.js')
 
 app.use(cors())
 app.use(express.json())
+app.use('/images', express.static('images'))
 
-let notes = []
+Sentry.init({
+  dsn: 'https://7fb3569bd6b5464c8e3b5339f671c1cb@o4504639588335616.ingest.sentry.io/4504639591219200',
+  integrations: [
+    // enable HTTP calls tracing
+    new Sentry.Integrations.Http({ tracing: true }),
+    // enable Express.js middleware tracing
+    new Tracing.Integrations.Express({
+      // to trace all requests to the default router
+      app,
+      // alternatively, you can specify the routes you want to trace:
+      // router: someRouter,
+    }),
+  ],
+
+  // We recommend adjusting this value in production, or using tracesSampler
+  // for finer control
+  tracesSampleRate: 1.0,
+})
 
 app.get('/', (req, res) => {
   res.send('<h1>Hello World</h1>')
@@ -21,25 +43,42 @@ app.get('/api/notes', (req, res) => {
   })
 })
 
-app.get('/api/notes/:id', (req, res) => {
-  const id = Number(req.params.id)
-  const note = notes.find(note => note.id === id)
+app.get('/api/notes/:id', (req, res, next) => {
+  const { id } = req.params
+  
+  Note.findById(id).then(note => {
+    if (note) {
+      res.json(note)
+    } else {
+      res.status(404).end()
+    }
+  }).catch(err => next(err))
+})
 
-  if (note) {
-    res.json(note)
-  } else {
-    res.status(404).end()
+app.put('/api/notes/:id', (req, res, next) => {
+  const { id } = req.params
+  const note = req.body
+
+  const newNoteInfo = {
+    content: note.content,
+    important: note.important
   }
+  
+  Note.findByIdAndUpdate(id, newNoteInfo, { new: true })
+    .then(result => {
+      res.json(result)
+    }).catch(err => next(err))
 })
 
-app.delete('/api/notes/:id', (req, res) => {
-  const id = Number(req.params.id)
-  notes = notes.filter(note => note.id !== id)
+app.delete('/api/notes/:id', (req, res, next) => {
+  const { id } = req.params
 
-  res.status(204).end()
+  Note.findByIdAndDelete(id).then(() => {
+    res.status(204).end()
+  }).catch(err => next(err))
 })
 
-app.post('/api/notes', (req, res) => {
+app.post('/api/notes', (req, res, next) => {
   const note = req.body
 
   if (!note || !note.content) {
@@ -51,19 +90,23 @@ app.post('/api/notes', (req, res) => {
   const newNote = new Note ({
     content: note.content,
     date: new Date(),
-    note: note.important || false
+    important: note.important || false
   })
 
   newNote.save().then(savedNote => {
     res.status(201).json(savedNote)
-  })
+  }).catch(err => next(err))
 })
 
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not found'
-  })
-})
+// Es importante el orden de los PATH y los MIDDLEWARE, ya que va de arriba a abajo.
+// Poner primero los PATH y luego los MIDDLEWARE sería lo más apropiado
+// Este middleware es para controlar que no se ha entrado en ninguna ruta correcta de la API
+app.use(notFound)
+
+// Primero dejamos el notFound y luego dejamos que controle Sentry el error
+app.use(Sentry.Handlers.errorHandler())
+// Este middleware es para controlar los errores que puedan ser comunes bajo un mismo código.
+app.use(handleErrors)
 
 const PORT = process.env.PORT || 4001
 app.listen(PORT, () => {

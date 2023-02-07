@@ -12,7 +12,9 @@ mongoose.connect(connectionString)
     console.error(err)
   })
 
-
+process.on('uncaughtException', () => {
+  mongoose.connection.close()
+})
 
 /* 
 Note.find({})
