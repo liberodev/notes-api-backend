@@ -1,37 +1,24 @@
+require('dotenv').config()
+require('./mongo.js')
+
 const express = require('express')
-const cors = require('cors')
 const app = express()
+const cors = require('cors')
+const Note = require('./models/Note')
 
 app.use(cors())
 app.use(express.json())
 
-let notes = [
-  {
-    id: 1,
-    content: 'Me tengo que suscribir a @midudev en Twitch',
-    date: '2019-05-30T17:30:31.098Z',
-    important: true
-  },
-  {
-    id: 2,
-    content: 'Tengo que estudiar las clases del FullStack Bootcamp',
-    date: '2019-05-30T18:39:34.091Z',
-    important: false
-  },
-  {
-    id: 3,
-    content: 'Repasar los retos de JavaScript de midudev',
-    date: '2019-05-30T19:20:14.298Z',
-    important: true
-  }
-]
+let notes = []
 
 app.get('/', (req, res) => {
   res.send('<h1>Hello World</h1>')
 })
 
 app.get('/api/notes', (req, res) => {
-  res.json(notes)
+  Note.find({}).then(notes => {
+    res.json(notes)
+  })
 })
 
 app.get('/api/notes/:id', (req, res) => {
@@ -57,24 +44,19 @@ app.post('/api/notes', (req, res) => {
 
   if (!note || !note.content) {
     return res.status(400).json({
-      error: 'note.content is missing'
+      error: 'required "content" field is missing'
     })
   }
 
-  /* Buscamos la id máxima, para luego generar la nueva id */
-  const ids = notes.map(note => note.id)
-  const maxId = Math.max(...ids)
-
-  const newNote = {
-    id: maxId + 1,
+  const newNote = new Note ({
     content: note.content,
-    date: new Date().toString(),
-    note: typeof note.important !== 'undefined' ? note.important : false
-  }
+    date: new Date(),
+    note: note.important || false
+  })
 
-  notes = [...notes, newNote]
-
-  res.status(201).json(newNote)
+  newNote.save().then(savedNote => {
+    res.status(201).json(savedNote)
+  })
 })
 
 app.use((req, res) => {
@@ -83,7 +65,7 @@ app.use((req, res) => {
   })
 })
 
-const PORT = 4001
+const PORT = process.env.PORT || 4001
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
