@@ -22,30 +22,29 @@ Sentry.init({
     // enable Express.js middleware tracing
     new Tracing.Integrations.Express({
       // to trace all requests to the default router
-      app,
+      app
       // alternatively, you can specify the routes you want to trace:
       // router: someRouter,
-    }),
+    })
   ],
 
   // We recommend adjusting this value in production, or using tracesSampler
   // for finer control
-  tracesSampleRate: 1.0,
+  tracesSampleRate: 1.0
 })
 
 app.get('/', (req, res) => {
   res.send('<h1>Hello World</h1>')
 })
 
-app.get('/api/notes', (req, res) => {
-  Note.find({}).then(notes => {
-    res.json(notes)
-  })
+app.get('/api/notes', async (req, res) => {
+  const notes = await Note.find({})
+  res.json(notes)
 })
 
 app.get('/api/notes/:id', (req, res, next) => {
   const { id } = req.params
-  
+
   Note.findById(id).then(note => {
     if (note) {
       res.json(note)
@@ -63,22 +62,25 @@ app.put('/api/notes/:id', (req, res, next) => {
     content: note.content,
     important: note.important
   }
-  
+
   Note.findByIdAndUpdate(id, newNoteInfo, { new: true })
     .then(result => {
       res.json(result)
     }).catch(err => next(err))
 })
 
-app.delete('/api/notes/:id', (req, res, next) => {
+app.delete('/api/notes/:id', async (req, res, next) => {
   const { id } = req.params
 
-  Note.findByIdAndDelete(id).then(() => {
+  try {
+    await Note.findByIdAndDelete(id)
     res.status(204).end()
-  }).catch(err => next(err))
+  } catch (err) {
+    next(err)
+  }
 })
 
-app.post('/api/notes', (req, res, next) => {
+app.post('/api/notes', async (req, res, next) => {
   const note = req.body
 
   if (!note || !note.content) {
@@ -87,15 +89,22 @@ app.post('/api/notes', (req, res, next) => {
     })
   }
 
-  const newNote = new Note ({
+  const newNote = new Note({
     content: note.content,
     date: new Date(),
     important: note.important || false
   })
 
-  newNote.save().then(savedNote => {
-    res.status(201).json(savedNote)
-  }).catch(err => next(err))
+  // newNote.save().then(savedNote => {
+  //   res.status(201).json(savedNote)
+  // }).catch(err => next(err))
+
+  try {
+    const savedNote = await newNote.save()
+    res.json(savedNote)
+  } catch (err) {
+    next(err)
+  }
 })
 
 // Es importante el orden de los PATH y los MIDDLEWARE, ya que va de arriba a abajo.
@@ -109,6 +118,8 @@ app.use(Sentry.Handlers.errorHandler())
 app.use(handleErrors)
 
 const PORT = process.env.PORT || 4001
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
+
+module.exports = { app, server }
