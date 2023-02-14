@@ -6,9 +6,10 @@ const Tracing = require('@sentry/tracing')
 const express = require('express')
 const app = express()
 const cors = require('cors')
-const Note = require('./models/Note')
 const notFound = require('./middleware/notFound.js')
 const handleErrors = require('./middleware/handleErrors.js')
+const notesRouter = require('./controllers/notes')
+const usersRouter = require('./controllers/users')
 
 app.use(cors())
 app.use(express.json())
@@ -37,75 +38,8 @@ app.get('/', (req, res) => {
   res.send('<h1>Hello World</h1>')
 })
 
-app.get('/api/notes', async (req, res) => {
-  const notes = await Note.find({})
-  res.json(notes)
-})
-
-app.get('/api/notes/:id', (req, res, next) => {
-  const { id } = req.params
-
-  Note.findById(id).then(note => {
-    if (note) {
-      res.json(note)
-    } else {
-      res.status(404).end()
-    }
-  }).catch(err => next(err))
-})
-
-app.put('/api/notes/:id', (req, res, next) => {
-  const { id } = req.params
-  const note = req.body
-
-  const newNoteInfo = {
-    content: note.content,
-    important: note.important
-  }
-
-  Note.findByIdAndUpdate(id, newNoteInfo, { new: true })
-    .then(result => {
-      res.json(result)
-    }).catch(err => next(err))
-})
-
-app.delete('/api/notes/:id', async (req, res, next) => {
-  const { id } = req.params
-
-  try {
-    await Note.findByIdAndDelete(id)
-    res.status(204).end()
-  } catch (err) {
-    next(err)
-  }
-})
-
-app.post('/api/notes', async (req, res, next) => {
-  const note = req.body
-
-  if (!note || !note.content) {
-    return res.status(400).json({
-      error: 'required "content" field is missing'
-    })
-  }
-
-  const newNote = new Note({
-    content: note.content,
-    date: new Date(),
-    important: note.important || false
-  })
-
-  // newNote.save().then(savedNote => {
-  //   res.status(201).json(savedNote)
-  // }).catch(err => next(err))
-
-  try {
-    const savedNote = await newNote.save()
-    res.json(savedNote)
-  } catch (err) {
-    next(err)
-  }
-})
+app.use('/api/notes', notesRouter)
+app.use('/api/users', usersRouter)
 
 // Es importante el orden de los PATH y los MIDDLEWARE, ya que va de arriba a abajo.
 // Poner primero los PATH y luego los MIDDLEWARE sería lo más apropiado
