@@ -3,7 +3,9 @@ const bcrypt = require('bcrypt')
 const User = require('../models/User')
 
 usersRouter.get('/', async (req, res) => {
-  const users = await User.find({})
+  // Si no se indican los atributos que se quieren recibir, como segundo parámetro del populate,
+  // se recibirán todos los campos. Los campos que se quieren recibir, se tienen que indicar con un valor de 1.
+  const users = await User.find({}).populate('notes', {content: 1, date: 1})
   res.json(users)
 })
 
