@@ -1,6 +1,7 @@
 const notesRouter = require('express').Router()
 const Note = require('../models/Note')
 const User = require('../models/User')
+const userExtractor = require('../middleware/userExtractor.js')
 
 notesRouter.get('/', async (req, res) => {
   const notes = await Note.find({}).populate('user', {username: 1})
@@ -19,7 +20,7 @@ notesRouter.get('/:id', (req, res, next) => {
   }).catch(err => next(err))
 })
 
-notesRouter.put('/:id', (req, res, next) => {
+notesRouter.put('/:id', userExtractor, (req, res, next) => {
   const { id } = req.params
   const note = req.body
 
@@ -34,12 +35,16 @@ notesRouter.put('/:id', (req, res, next) => {
     }).catch(err => next(err))
 })
 
-notesRouter.post('/', async (req, res, next) => {
+notesRouter.post('/', userExtractor, async (req, res, next) => {
   const {
     content,
-    important = false,
-    userId
+    important = false
   } = req.body
+
+  // Al haber mutado la request desde el middleware 'userExtractor', añadiendo el userId,
+  // se puede recuperar desde aquí, al haber indicado la ejecución de dicho middleware
+  // en la ejecución del post
+  const { userId } = req
 
   const user = await User.findById(userId)
 
@@ -68,7 +73,7 @@ notesRouter.post('/', async (req, res, next) => {
   }
 })
 
-notesRouter.delete('/:id', async (req, res, next) => {
+notesRouter.delete('/:id', userExtractor, async (req, res, next) => {
   const { id } = req.params
 
   try {
